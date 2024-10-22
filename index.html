@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordle by samy</title>
+    <style>
+        body {
+            font-family: 'Clear Sans', 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #121213;
+            color: #ffffff;
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .board {
+            display: grid;
+            grid-template-rows: repeat(6, 1fr);
+            gap: 5px;
+            margin-bottom: 30px;
+        }
+        .row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+        }
+        .tile {
+            width: 60px;
+            height: 60px;
+            border: 2px solid #3a3a3c;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .keyboard {
+            display: grid;
+            grid-template-rows: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .keyboard-row {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+        }
+        .key {
+            min-width: 40px;
+            height: 58px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.25rem;
+            font-weight: bold;
+            background-color: #818384;
+            cursor: pointer;
+            user-select: none;
+        }
+        .key-wide {
+            min-width: 65px;
+        }
+        .correct {
+            background-color: #538d4e;
+            border-color: #538d4e;
+        }
+        .present {
+            background-color: #b59f3b;
+            border-color: #b59f3b;
+        }
+        .absent {
+            background-color: #3a3a3c;
+            border-color: #3a3a3c;
+        }
+        .shake {
+            animation: shake 0.5s;
+        }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            10% { transform: translateX(-5px); }
+            20% { transform: translateX(5px); }
+            30% { transform: translateX(-5px); }
+            40% { transform: translateX(5px); }
+            50% { transform: translateX(-5px); }
+            60% { transform: translateX(5px); }
+            70% { transform: translateX(-5px); }
+            80% { transform: translateX(5px); }
+            90% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+        .game-over {
+            font-size: 1.5rem;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="title">WORDLE</div>
+        <div class="board" id="board"></div>
+        <div class="keyboard" id="keyboard"></div>
+        <div class="game-over" id="gameOver"></div>
+    </div>
+
+    <script>
+        const WORD_LENGTH = 5;
+        const FLIP_ANIMATION_DURATION = 500;
+        const DANCE_ANIMATION_DURATION = 500;
+        const WORDS = ['APPLE', 'BEACH', 'CLOCK', 'DREAM', 'EARTH', 'FROGS', 'BITCH', 'HOUSE', 'HOLES', 'BALLS', 'WEEDS', 'OPIUM', 'MUDER', 'BOXER', 'SHADY', 'DRDRE', 'MARIO', 'LYRIC', 'WHITE', 'BLACK', 'COCAN', 'SCOUT', 'CHEST', 'LIGHT', 'CRING', 'RIMJB', 'HEADS', 'BLOWS', 'POINT', 'RULER', 'SCALE', 'FLASH', 'BLIND', 'LATIN', 'ANIME', 'BROWN', 'KINGS', 'PUSSY', 'STUCK', 'BUSTY'];
+        const KEYBOARD_LAYOUT = [
+            ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+            ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+            ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '←']
+        ];
+
+        let currentWord = '';
+        let targetWord = '';
+        let guessesRemaining = 6;
+        let currentGuess = [];
+        let nextLetter = 0;
+        let gameOver = false;
+
+        function initializeGame() {
+            targetWord = WORDS[Math.floor(Math.random() * WORDS.length)];
+            createBoard();
+            createKeyboard();
+            window.addEventListener('keydown', handleKeyPress);
+        }
+
+        function createBoard() {
+            const board = document.getElementById('board');
+            for (let i = 0; i < 6; i++) {
+                const row = document.createElement('div');
+                row.className = 'row';
+                for (let j = 0; j < 5; j++) {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile';
+                    row.appendChild(tile);
+                }
+                board.appendChild(row);
+            }
+        }
+
+        function createKeyboard() {
+            const keyboard = document.getElementById('keyboard');
+            KEYBOARD_LAYOUT.forEach((row, rowIndex) => {
+                const keyboardRow = document.createElement('div');
+                keyboardRow.className = 'keyboard-row';
+                row.forEach(key => {
+                    const keyElem = document.createElement('div');
+                    keyElem.className = 'key';
+                    keyElem.textContent = key;
+                    keyElem.setAttribute('data-key', key);
+                    keyElem.addEventListener('click', () => handleKeyPress({ key }));
+                    if (key === 'ENTER' || key === '←') {
+                        keyElem.classList.add('key-wide');
+                    }
+                    keyboardRow.appendChild(keyElem);
+                });
+                keyboard.appendChild(keyboardRow);
+            });
+        }
+
+        function handleKeyPress(e) {
+            if (gameOver) return;
+
+            const key = e.key.toUpperCase();
+            if (key === 'ENTER') {
+                if (nextLetter === 5) {
+                    checkGuess();
+                } else {
+                    shakeRow();
+                }
+            } else if (key === 'BACKSPACE' || key === '←') {
+                if (nextLetter > 0) {
+                    deleteLetter();
+                }
+            } else if (isLetter(key)) {
+                if (nextLetter < 5) {
+                    insertLetter(key);
+                }
+            }
+        }
+
+        function isLetter(key) {
+            return key.length === 1 && key.match(/[A-Z]/i);
+        }
+
+        function insertLetter(letter) {
+            const row = document.getElementsByClassName('row')[6 - guessesRemaining];
+            const tile = row.children[nextLetter];
+            tile.textContent = letter;
+            tile.classList.add('populated');
+            currentGuess.push(letter);
+            nextLetter++;
+        }
+
+        function deleteLetter() {
+            const row = document.getElementsByClassName('row')[6 - guessesRemaining];
+            const tile = row.children[nextLetter - 1];
+            tile.textContent = '';
+            tile.classList.remove('populated');
+            currentGuess.pop();
+            nextLetter--;
+        }
+
+        function checkGuess() {
+            const guess = currentGuess.join('');
+            if (guess === targetWord) {
+                revealWord('correct');
+                gameOver = true;
+                showGameOver(true);
+                return;
+            }
+
+            const row = document.getElementsByClassName('row')[6 - guessesRemaining];
+            const guessString = guess;
+            const targetString = targetWord;
+
+            for (let i = 0; i < 5; i++) {
+                const tile = row.children[i];
+                const letter = guessString[i];
+                const key = document.querySelector(`[data-key="${letter}"]`);
+
+                setTimeout(() => {
+                    if (targetString[i] === letter) {
+                        tile.classList.add('correct');
+                        key.classList.add('correct');
+                    } else if (targetString.includes(letter)) {
+                        tile.classList.add('present');
+                        if (!key.classList.contains('correct')) {
+                            key.classList.add('present');
+                        }
+                    } else {
+                        tile.classList.add('absent');
+                        key.classList.add('absent');
+                    }
+                }, (i + 1) * FLIP_ANIMATION_DURATION / 2);
+
+                tile.classList.add('flip');
+            }
+
+            guessesRemaining--;
+            currentGuess = [];
+            nextLetter = 0;
+
+            if (guessesRemaining === 0) {
+                gameOver = true;
+                showGameOver(false);
+            }
+        }
+
+        function revealWord(type) {
+            const row = document.getElementsByClassName('row')[6 - guessesRemaining];
+            for (let i = 0; i < 5; i++) {
+                const tile = row.children[i];
+                setTimeout(() => {
+                    tile.classList.add(type);
+                    tile.classList.add('dance');
+                    tile.style.animationDelay = `${(i * DANCE_ANIMATION_DURATION) / 5}ms`;
+                }, (i * FLIP_ANIMATION_DURATION) / 2);
+            }
+        }
+
+        function shakeRow() {
+            const row = document.getElementsByClassName('row')[6 - guessesRemaining];
+            row.classList.add('shake');
+            setTimeout(() => {
+                row.classList.remove('shake');
+            }, 500);
+        }
+
+        function showGameOver(won) {
+            const gameOverElem = document.getElementById('gameOver');
+            gameOverElem.textContent = won ? 'Congratulations!' : `Game Over! The word was ${targetWord}.`;
+        }
+
+        initializeGame();
+    </script>
+</body>
+</html>
