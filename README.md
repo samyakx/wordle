@@ -1,2 +1,2 @@
 # wordle
-its a random wordle game.
+its a random wordle game with surprises.
